@@ -76,6 +76,7 @@ use IO::Socket::SSL;
 #use IO::Socket::SSL 'debug3';
 
 
+my %rdns_cache = ();
 
 ################################################################################
 ### usage ######################################################################
@@ -101,6 +102,7 @@ sub show_usage {
 	print "        -d : Print debug info. \n";
 	print "        -r : Replace existing reports rather than skipping them. \n";
 	print "  --delete : Delete processed message files (the XML is stored in the \n";
+	print "    --rdns : Perform reverse DNS lookups on IP addresses in reports. \n";
 	print "             database for later reference). \n";
 	print "\n";
 }
@@ -114,7 +116,7 @@ sub show_usage {
 ################################################################################
 
 # Define all possible configuration options.
-our ($debug, $delete_reports, $delete_failed, $reports_replace, $maxsize_xml, $compress_xml,
+our ($debug, $delete_reports, $delete_failed, $host_lookup, $reports_replace, $maxsize_xml, $compress_xml,
 	$dbname, $dbuser, $dbpass, $dbhost,
 	$imapserver, $imapuser, $imappass, $imapignoreerror, $imapssl, $imaptls, $imapmovefolder, $imapreadfolder, $imapopt, $tlsverify);
 
@@ -150,11 +152,11 @@ if (!defined $imapreadfolder ) {
 if (!defined $imapignoreerror ) {
   $imapignoreerror = 0;   # maintain compatibility to old version
 }
-  
+
 # Get command line options.
 my %options = ();
 use constant { TS_IMAP => 0, TS_MESSAGE_FILE => 1, TS_XML_FILE => 2, TS_MBOX_FILE => 3 };
-GetOptions( \%options, 'd', 'r', 'x', 'm', 'e', 'i', 'delete' );
+GetOptions( \%options, 'd', 'r', 'x', 'm', 'e', 'i', 'delete', 'rdns' );
 
 # Evaluate command line options
 my $source_options = 0;
@@ -204,6 +206,7 @@ if ($ARGV[0]) {
 if (exists $options{r}) {$reports_replace = 1;}
 if (exists $options{d}) {$debug = 1;}
 if (exists $options{delete}) {$delete_reports = 1;}
+if (exists $options{rdns}) {$host_lookup = 1;}
 
 
 # Setup connection to database server.
@@ -706,22 +709,43 @@ sub storeXMLInDatabase {
 
 		# What type of IP address?
 		my ($nip, $iptype, $ipval);
-		if ($debug) {
-			print "ip=$ip\n";
-		}
+		my $hostname;
 		if($nip = inet_pton(AF_INET, $ip)) {
 			$ipval = unpack "N", $nip;
 			$iptype = "ip";
+			if ($host_lookup) {
+				if (defined $rdns_cache{$ip}) {
+					$hostname = $rdns_cache{$ip};
+				} else {
+					$hostname = gethostbyaddr($nip, AF_INET) || $ip;
+					$rdns_cache{$ip} = $hostname;
+				}
+			}
 		} elsif($nip = inet_pton(AF_INET6, $ip)) {
 			$ipval = "X'" . unpack("H*",$nip) . "'";
 			$iptype = "ip6";
+			if ($host_lookup) {
+				if (defined $rdns_cache{$ip}) {
+					$hostname = $rdns_cache{$ip};
+				} else {
+					$hostname = gethostbyaddr($nip, AF_INET6) || $ip;
+					$rdns_cache{$ip} = $hostname;
+				}
+			}
 		} else {
 			print "??? mystery ip $ip\n";
 			next; # of dorow
 		}
+		if ($debug) {
+			if ($host_lookup && $hostname ne $ip) {
+				print "ip=$ip ($hostname)\n";
+			} else {
+				print "ip=$ip\n";
+			}
+		}
 
-		$dbh->do(qq{INSERT INTO rptrecord(serial,$iptype,rcount,disposition,spf_align,dkim_align,reason,dkimdomain,dkimresult,spfdomain,spfresult,identifier_hfrom)
-			VALUES(?,$ipval,?,?,?,?,?,?,?,?,?,?)},undef,$serial,$count,$disp,$spf_align,$dkim_align,$reason,$dkim,$dkimresult,$spf,$spfresult,$identifier_hfrom);
+		$dbh->do(qq{INSERT INTO rptrecord(serial,$iptype,hostname,rcount,disposition,spf_align,dkim_align,reason,dkimdomain,dkimresult,spfdomain,spfresult,identifier_hfrom)
+			VALUES(?,$ipval,?,?,?,?,?,?,?,?,?,?,?)},undef,$serial,$hostname,$count,$disp,$spf_align,$dkim_align,$reason,$dkim,$dkimresult,$spf,$spfresult,$identifier_hfrom);
 		if ($dbh->errstr) {
 			print "Cannot add report data to database (". $dbh->errstr ."). Skipped.\n";
 			return 0;
@@ -790,6 +814,7 @@ sub checkDatabase {
 				"serial"		, "int(10) unsigned NOT NULL",
 				"ip"			, "int(10) unsigned",
 				"ip6"			, "binary(16)",
+				"hostname"		, "varchar(255)",
 				"rcount"		, "int(10) unsigned NOT NULL",
 				"disposition"		, "enum('none','quarantine','reject')",
 				"reason"		, "varchar(255)",
