@@ -676,8 +676,9 @@ sub storeXMLInDatabase {
 		my $spf_align = $r{'row'}->{'policy_evaluated'}->{'spf'} || "unknown";
 
 		my $identifier_hfrom = $r{'identifiers'}->{'header_from'};
+		my $identifier_mfrom = $r{'identifiers'}->{'envelope_from'};
 
-		my ($dkim, $dkimresult, $spf, $spfresult, $reason);
+		my ($dkim, $dkimresult, $spf, $spfresult, $spfscope, $reason);
 		my $rp = $r{'auth_results'}->{'dkim'};
 		if(ref $rp eq "HASH") {
 			$dkim = $rp->{'domain'};
@@ -692,6 +693,10 @@ sub storeXMLInDatabase {
 		if(ref $rp eq "HASH") {
 			$spf = $rp->{'domain'};
 			$spfresult = $rp->{'result'};
+			$spfscope = $rp->{'scope'} || "mfrom";
+			if ($spfscope eq 'mfrom' && !$identifier_mfrom) {
+				$identifier_mfrom = $spf;
+			}
 		} else { # array
 			# glom domains together, report first result
 			$spf = join '/',map { my $d = $_->{'domain'}; ref $d eq "HASH"? "": $d } @$rp;
@@ -744,8 +749,8 @@ sub storeXMLInDatabase {
 			}
 		}
 
-		$dbh->do(qq{INSERT INTO rptrecord(serial,$iptype,hostname,rcount,disposition,spf_align,dkim_align,reason,dkimdomain,dkimresult,spfdomain,spfresult,identifier_hfrom)
-			VALUES(?,$ipval,?,?,?,?,?,?,?,?,?,?,?)},undef,$serial,$hostname,$count,$disp,$spf_align,$dkim_align,$reason,$dkim,$dkimresult,$spf,$spfresult,$identifier_hfrom);
+		$dbh->do(qq{INSERT INTO rptrecord(serial,$iptype,hostname,rcount,disposition,spf_align,dkim_align,reason,dkimdomain,dkimresult,spfdomain,spfresult,spfscope,identifier_hfrom,identifier_mfrom)
+			VALUES(?,$ipval,?,?,?,?,?,?,?,?,?,?,?,?,?)},undef,$serial,$hostname,$count,$disp,$spf_align,$dkim_align,$reason,$dkim,$dkimresult,$spf,$spfresult,$spfscope,$identifier_hfrom,$identifier_mfrom);
 		if ($dbh->errstr) {
 			print "Cannot add report data to database (". $dbh->errstr ."). Skipped.\n";
 			return 0;
@@ -822,9 +827,11 @@ sub checkDatabase {
 				"dkimresult"		, "enum('none','pass','fail','neutral','policy','temperror','permerror')",
 				"spfdomain"		, "varchar(255)",
 				"spfresult"		, "enum('none','neutral','pass','fail','softfail','temperror','permerror','unknown')",
+				"spfscope"		, "enum('mfrom','helo','pra') NOT NULL",
 				"spf_align"		, "enum('fail','pass','unknown') NOT NULL",
 				"dkim_align"		, "enum('fail','pass','unknown') NOT NULL",
 				"identifier_hfrom"	, "varchar(255)",
+				"identifier_mfrom"	, "varchar(255)",
 				],
 			additional_definitions 		=> "PRIMARY KEY (id), KEY serial (serial,ip), KEY serial6 (serial,ip6)",
 			table_options			=> "",
