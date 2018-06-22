@@ -59,6 +59,7 @@ use warnings;
 # Use these modules
 use Getopt::Long;
 use IO::Compress::Gzip qw(gzip $GzipError);
+use List::MoreUtils qw(uniq);
 #use Data::Dumper;
 use Mail::IMAPClient;
 use Mail::Mbox::MessageParser;
@@ -685,8 +686,8 @@ sub storeXMLInDatabase {
 			$dkim = undef if ref $dkim eq "HASH";
 			$dkimresult = $rp->{'result'};
 		} else { # array
-			# glom sigs together, report first result
-			$dkim = join '/',map { my $d = $_->{'domain'}; ref $d eq "HASH"?"": $d } @$rp;
+			# glom unique sigs together, report first result
+			$dkim = join '/', uniq map { my $d = $_->{'domain'}; ref $d eq "HASH"?"": $d } @$rp;
 			$dkimresult = $rp->[0]->{'result'};
 		}
 		$rp = $r{'auth_results'}->{'spf'};
@@ -698,8 +699,8 @@ sub storeXMLInDatabase {
 				$identifier_mfrom = $spf;
 			}
 		} else { # array
-			# glom domains together, report first result
-			$spf = join '/',map { my $d = $_->{'domain'}; ref $d eq "HASH"? "": $d } @$rp;
+			# glom unique domains together, report first result
+			$spf = join '/', uniq map { my $d = $_->{'domain'}; ref $d eq "HASH"? "": $d } @$rp;
 			$spfresult = $rp->[0]->{'result'};
 		}
 
