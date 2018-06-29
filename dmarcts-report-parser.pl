@@ -231,7 +231,7 @@ if ($reports_source == TS_IMAP) {
     }
 	}
 
-  
+
 	print "connection to $imapserver with Ssl => $imapssl, User => $imapuser, Ignoresizeerrors => $imapignoreerror\n" if $debug;
 
 	# Setup connection to IMAP server.
@@ -440,7 +440,7 @@ sub processXML {
 # itself is not checked to be a valid DMARC report.
 sub getXMLFromMessage {
 	my $message = $_[0];
-	
+
 	# fixup type in trustwave SEG mails
         $message =~ s/ContentType:/Content-Type:/;
 
