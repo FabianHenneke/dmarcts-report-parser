@@ -678,15 +678,29 @@ sub storeXMLInDatabase {
 		my $ip = $r{'row'}->{'source_ip'};
 		#print "ip $ip\n";
 		my $count = $r{'row'}->{'count'};
-		my $disp = $r{'row'}->{'policy_evaluated'}->{'disposition'};
-		 # some reports don't have dkim/spf, "unknown" is default for these
-		my $dkim_align = $r{'row'}->{'policy_evaluated'}->{'dkim'} || "unknown";
-		my $spf_align = $r{'row'}->{'policy_evaluated'}->{'spf'} || "unknown";
+		my $disp = lc($r{'row'}->{'policy_evaluated'}->{'disposition'});
+		if ($disp ne 'quarantine' || $disp ne 'reject') {
+			$disp = 'none';
+		}
+
+		# some reports don't have valid dkim/spf alignment results, "unknown" is default for these
+		my $dkim_align = lc($r{'row'}->{'policy_evaluated'}->{'dkim'});
+		if ($dkim_align ne 'pass' || $dkim_align ne 'fail') {
+			$dkim_align = 'unknown';
+		}
+		my $spf_align = lc($r{'row'}->{'policy_evaluated'}->{'spf'});
+		if ($spf_align ne 'pass' || $spf_align ne 'fail') {
+			$spf_align = 'unknown';
+		}
 
 		my $identifier_hfrom = $r{'identifiers'}->{'header_from'};
 		my $identifier_mfrom = $r{'identifiers'}->{'envelope_from'};
 
 		my ($dkim, $dkimresult, $spf, $spfresult, $spfscope, $reason);
+		if(ref $r{'auth_results'} ne "HASH") {
+			print "No auth_results found. Skipping.\n";
+			return;
+		}
 		my $rp = $r{'auth_results'}->{'dkim'};
 		if(ref $rp eq "HASH") {
 			$dkim = $rp->{'domain'};
@@ -701,7 +715,10 @@ sub storeXMLInDatabase {
 		if(ref $rp eq "HASH") {
 			$spf = $rp->{'domain'};
 			$spfresult = $rp->{'result'};
-			$spfscope = $rp->{'scope'} || "mfrom";
+			$spfscope = $rp->{'scope'};
+			if (!$spfscope || $spfscope ne 'helo') {
+				$spfscope = 'mfrom';
+			}
 			if ($spfscope eq 'mfrom' && !$identifier_mfrom) {
 				$identifier_mfrom = $spf;
 			}
@@ -835,7 +852,7 @@ sub checkDatabase {
 				"dkimresult"		, "enum('none','pass','fail','neutral','policy','temperror','permerror')",
 				"spfdomain"		, "varchar(255)",
 				"spfresult"		, "enum('none','neutral','pass','fail','softfail','temperror','permerror','unknown')",
-				"spfscope"		, "enum('mfrom','helo','pra') NOT NULL",
+				"spfscope"		, "enum('mfrom','helo')",
 				"spf_align"		, "enum('fail','pass','unknown') NOT NULL",
 				"dkim_align"		, "enum('fail','pass','unknown') NOT NULL",
 				"identifier_hfrom"	, "varchar(255)",
