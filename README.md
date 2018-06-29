@@ -122,3 +122,16 @@ The following options are always allowed:
 ```
 
 More info can currently be found at : [TechSneeze.com](http://www.techsneeze.com/how-parse-dmarc-reports-imap/)
+
+## Example Query
+
+The following query retrieves the identifiers for all non-DMARC-compliant messages with a `From` header with domain part `@example.com`:
+
+* `rdns`: reverse DNS of the source IP
+* `mfrom`: domain of the `Return-Path` header
+* `dkimd`: domain in the d= field of the `DKIM-Signature` header
+* `helo`: server HELO (only if no `Return-Path` was present)
+
+```sql
+SELECT hostname AS rdns, identifier_mfrom as mfrom, dkimdomain as dkimd, IF(spfscope = 'helo', spfdomain, '') as helo, SUM(rcount) AS freq, org FROM rptrecord JOIN report ON rptrecord.serial = report.serial WHERE identifier_hfrom = 'example.com' AND NOT (dkimresult = 'pass' OR spfresult = 'pass') GROUP BY rDNS, HFROM, MFROM, DKIMD, HELO, org ORDER BY freq DESC
+```
