@@ -460,6 +460,7 @@ sub getXMLFromMessage {
 
 	my $location;
 	my $isgzip = 0;
+	my $isxml = 0;
 
 	if(lc $mtype eq "application/zip") {
 		if ($debug) {
@@ -503,6 +504,9 @@ sub getXMLFromMessage {
 				$location = $ent->parts($i)->{ME_Bodyhandle}->{MB_Path};
 				$isgzip = 1 if $location =~ /\.gz$/;
 				print "$location\n" if $debug;
+			} elsif(lc $part->mime_type eq "text/xml") {
+				$location = $ent->parts($i)->{ME_Bodyhandle}->{MB_Path};
+				$isxml = 1;
 			} else {
 				# Skip the attachment otherwise.
 				if ($debug) {
@@ -535,11 +539,14 @@ sub getXMLFromMessage {
 			print "body is in " . $location . "\n";
 		}
 
-		# Open the zip file and process the XML contained inside.
+		# Open (and extract if necessary) the attached file and process the XML
+		# contained inside.
 		my $unzip = "";
 		if($isgzip) {
 			open(XML, "<:gzip", $location)
 			or $unzip = "ungzip";
+		} elsif($isxml) {
+			open(XML, $location);
 		} else {
 			open(XML,"unzip -p " . $location . " |")
 			or $unzip = "unzip"; # Will never happen.
