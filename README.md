@@ -1,5 +1,5 @@
 # dmarcts-report-parser
-A Perl based tool to parse DMARC reports, based on John Levine's [rddmarc](http://www.taugh.com/rddmarc/), but extended by the following features:
+A Perl based tool to parse DMARC reports, originally developed by [techsneeze](http://www.techsneeze.com/how-parse-dmarc-reports-imap/) and based on John Levine's [rddmarc](http://www.taugh.com/rddmarc/), but extended by the following features:
 * Allow to read messages from an IMAP server and not only from the local filesystem.
 * Store much more XML values into the database (for example the missing SPF and DKIM results from the policy_evaluated section) and also the entire XML for later reference.
 * Needed database tables and columns are created automatically, user only needs to provide a database. The database schema is compatible to the one used by rddmarc, but extends it by additional fields. Users can switch from rddmarc to dmarcts-report-parser without having to do any changes to the database by themselves.
@@ -11,6 +11,12 @@ innodb_large_prefix	= on
 innodb_file_format	= barracuda
 innodb_file_per_table	= true
 ```
+
+This fork comes with the following additional features:
+* A CLI option to perform reverse DNS on the source IPs
+* Supports uncompressed reports
+* Extraction of the SPF scope (mfrom or server HELO) and the mfrom identifier
+* A more robust report parser that takes certain deviations from the report standard into account that occur in real-world reports
 
 ## Installation and Configuration
 
@@ -62,8 +68,8 @@ $imappass         = 'xxx';
 $imapssl          = '0';        # If set to 1, remember to change server port to 993 and to disable imaptls.
 $imaptls          = '1';        # Enabled as the default and best-practice.
 $tlsverify        = '1';        # Enable verify server cert as the default and best-practice.
-$imapignoreerror  = 0;          # set it to 1 if you see an "ERROR: message_string() 
-                                # expected 119613 bytes but received 81873 you may 
+$imapignoreerror  = 0;          # set it to 1 if you see an "ERROR: message_string()
+                                # expected 119613 bytes but received 81873 you may
                                 # need the IgnoreSizeErrors option" because of malfunction
                                 # imap server as MS Exchange 2007, ...
 $imapreadfolder = 'Inbox';
@@ -77,9 +83,9 @@ $maxsize_xml = 50000;
 # store XML as base64 encopded gzip in database (save space, harder usable)
 $compress_xml = 0;
 
-# if there was an error during file processing (message does not contain XML or ZIP parts, 
-# or a database error) the parser reports an error and does not delete the file, even if 
-# delete_reports is set (or --delete is given). Deletion can be enforced by delete_failed, 
+# if there was an error during file processing (message does not contain XML or ZIP parts,
+# or a database error) the parser reports an error and does not delete the file, even if
+# delete_reports is set (or --delete is given). Deletion can be enforced by delete_failed,
 # however not for database errors.
 $delete_failed = 0;
 ```
@@ -112,6 +118,7 @@ The following options are always allowed:
 #        -r : Replace existing reports rather than failing.
 #  --delete : Delete processed message files (the XML is stored in the
 #             database for later reference).
+#    --rdns : Perform a reverse DNS query for every source IP (slow).
 ```
 
 More info can currently be found at : [TechSneeze.com](http://www.techsneeze.com/how-parse-dmarc-reports-imap/)
