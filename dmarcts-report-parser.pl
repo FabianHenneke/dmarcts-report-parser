@@ -496,7 +496,7 @@ sub getXMLFromMessage {
 				print "$location\n" if $debug;
 				last; # of parts
 			} elsif(lc $part->mime_type eq "application/x-zip-compressed"
-				or $part->mime_type eq "application/zip") {
+				or lc $part->mime_type eq "application/zip") {
 
 				$location = $ent->parts($i)->{ME_Bodyhandle}->{MB_Path};
 				print "$location\n" if $debug;
