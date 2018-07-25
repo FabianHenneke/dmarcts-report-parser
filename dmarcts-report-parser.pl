@@ -74,6 +74,7 @@ use Socket6;
 use PerlIO::gzip;
 use File::Basename ();
 use IO::Socket::SSL;
+use Try::Tiny;
 #use IO::Socket::SSL 'debug3';
 
 
@@ -398,14 +399,19 @@ sub processXML {
 
 	# If !$xml, the file/mail is probably not a DMARC report.
 	# So do not storeXMLInDatabase.
-	if ($xml && storeXMLInDatabase($xml) <= 0) {
-		# If storeXMLInDatabase returns false, there was some sort
-		# of database storage failure and we MUST NOT delete the
-		# file, because it has not been pushed into the database.
-		# The user must investigate this issue.
+	try {
+		if ($xml && storeXMLInDatabase($xml) <= 0) {
+			# If storeXMLInDatabase returns false, there was some sort
+			# of database storage failure and we MUST NOT delete the
+			# file, because it has not been pushed into the database.
+			# The user must investigate this issue.
+			print "Skipping $f due to database errors.\n";
+			return 5; #xml ok(1), but database error(4), thus no delete (!2)
+		}
+	} catch {
 		print "Skipping $f due to database errors.\n";
 		return 5; #xml ok(1), but database error(4), thus no delete (!2)
-	}
+	};
 
 	# Delete processed message, if the --delete option
 	# is given. Failed reports are only deleted, if delete_failed is given.
